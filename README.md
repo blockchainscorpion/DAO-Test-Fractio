@@ -2,7 +2,7 @@
 
 ## Overview
 
-DAO-Test is a decentralized autonomous organization (DAO) implementation project built using Solidity smart contracts and a React frontend. This project aims to demonstrate the core functionalities of a DAO, including membership management, proposal creation, voting, and execution.
+DAO-Test-Fractio is a decentralized autonomous organization (DAO) implementation project built using Solidity smart contracts and a React frontend. This project aims to demonstrate the core functionalities of a DAO for Fractio's platform, including membership management, proposal creation, voting, and execution.
 
 ## Project Structure
 
