@@ -1,5 +1,5 @@
 # Use an official Node runtime as the base image
-FROM node:20
+FROM node:14
 
 # Set the working directory in the container
 WORKDIR /app
@@ -15,9 +15,6 @@ RUN npm install -g truffle
 
 # Copy the rest of the application code
 COPY . .
-
-# Compile the smart contracts
-RUN truffle compile
 
 # Expose the port the app runs on
 EXPOSE 3000

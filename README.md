@@ -141,7 +141,9 @@ This script will run `truffle migrate`, and if successful, it will rebuild the D
 The project includes a comprehensive test suite for the Governance contract. To run the tests:
 
 ```
-truffle test
+truffle console - runs truffle development console
+
+test - runs the test script, 'truffle' is not needed when using the truffle dev suite.
 ```
 
 ## Future Development
