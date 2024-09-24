@@ -1,17 +1,11 @@
 // SPDX-License-Identifier: MIT
-pragma solidity 0.8.17;
+pragma solidity ^0.8.20;
 
-contract Governance {
-    struct Proposal {
-        uint256 id;
-        address proposer;
-        string description;
-        uint256 forVotes;
-        uint256 againstVotes;
-        bool executed;
-        uint256 startTime;
-        uint256 endTime;
-    }
+import "./GovernanceToken.sol";
+import "@openzeppelin/contracts/access/AccessControl.sol";
+
+contract Governance is AccessControl {
+    GovernanceToken public governanceToken;
 
     struct Member {
         bool isApproved;
@@ -19,112 +13,144 @@ contract Governance {
         uint256 votingPower;
     }
 
-    Proposal[] public proposals;
+    struct Proposal {
+        uint256 id;
+        address proposer;
+        string description;
+        uint256 forVotes;
+        uint256 againstVotes;
+        uint256 startTime;
+        bool executed;
+    }
+
     mapping(address => Member) public members;
-    mapping(uint256 => mapping(address => bool)) public hasVoted;
+    mapping(uint256 => Proposal) public proposals;
+    mapping(address => mapping(uint256 => bool)) public hasVoted;
+    mapping(address => address) public delegates;
 
-    uint256 public quorumPercentage = 50; // 50% quorum
+    uint256 public proposalCount;
     uint256 public votingPeriod = 3 days;
-    uint256 public totalVotingPower;
+    uint256 public quorumPercentage = 10;
 
-    address public admin;
+    bytes32 public constant ADMIN_ROLE = keccak256("ADMIN_ROLE");
 
-    event ProposalCreated(uint256 proposalId, address proposer, string description);
-    event Voted(uint256 proposalId, address voter, bool support);
-    event ProposalExecuted(uint256 proposalId);
     event MemberAdded(address member);
     event MemberRemoved(address member);
+    event KYCStatusUpdated(address member, bool status);
+    event ProposalCreated(uint256 indexed proposalId, address proposer, string description);
+    event Voted(uint256 indexed proposalId, address voter, bool support, uint256 weight);
+    event ProposalExecuted(uint256 indexed proposalId);
+    event DelegateChanged(address indexed delegator, address indexed fromDelegate, address indexed toDelegate);
 
-    modifier onlyAdmin() {
-        require(msg.sender == admin, "Only admin can perform this action");
-        _;
+    constructor(address _governanceToken) {
+        governanceToken = GovernanceToken(_governanceToken);
+        _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
+        _grantRole(ADMIN_ROLE, msg.sender);
     }
 
-    modifier onlyMember() {
-        require(members[msg.sender].isApproved, "Only approved members can perform this action");
-        _;
+    function addMember(address _member) external onlyRole(ADMIN_ROLE) {
+        require(!members[_member].isApproved, "Member already exists");
+        members[_member] = Member(true, false, 0);
+        emit MemberAdded(_member);
     }
 
-    constructor() {
-        admin = msg.sender;
-        members[msg.sender] = Member(true, true, 1);
-        totalVotingPower = 1;
-    }
-
-    function addMember(address _newMember, uint256 _votingPower) external onlyAdmin {
-        require(!members[_newMember].isApproved, "Member already exists");
-        members[_newMember] = Member(true, false, _votingPower);
-        totalVotingPower += _votingPower;
-        emit MemberAdded(_newMember);
-    }
-
-    function removeMember(address _member) external onlyAdmin {
+    function removeMember(address _member) external onlyRole(ADMIN_ROLE) {
         require(members[_member].isApproved, "Member does not exist");
-        totalVotingPower -= members[_member].votingPower;
         delete members[_member];
         emit MemberRemoved(_member);
     }
 
-    function updateKYCStatus(address _member, bool _kycPassed) external onlyAdmin {
+    function updateKYCStatus(address _member, bool _status) external onlyRole(ADMIN_ROLE) {
         require(members[_member].isApproved, "Member does not exist");
-        members[_member].hasPassedKYC = _kycPassed;
+        members[_member].hasPassedKYC = _status;
+        governanceToken.setKYCStatus(_member, _status);
+        emit KYCStatusUpdated(_member, _status);
     }
 
-    function createProposal(string memory _description) external onlyMember {
-        require(members[msg.sender].hasPassedKYC, "Member has not passed KYC");
-        uint256 proposalId = proposals.length;
-        proposals.push(Proposal({
+    function createProposal(string memory _description) external {
+        require(members[msg.sender].isApproved, "Not a member");
+        require(members[msg.sender].hasPassedKYC, "KYC not passed");
+        require(votingPower(msg.sender) > 0, "No voting power");
+        
+        uint256 proposalId = proposalCount++;
+        proposals[proposalId] = Proposal({
             id: proposalId,
             proposer: msg.sender,
             description: _description,
             forVotes: 0,
             againstVotes: 0,
-            executed: false,
             startTime: block.timestamp,
-            endTime: block.timestamp + votingPeriod
-        }));
+            executed: false
+        });
+
         emit ProposalCreated(proposalId, msg.sender, _description);
     }
 
-    function vote(uint256 _proposalId, bool _support) external onlyMember {
-        require(members[msg.sender].hasPassedKYC, "Member has not passed KYC");
-        require(_proposalId < proposals.length, "Proposal does not exist");
-        require(!hasVoted[_proposalId][msg.sender], "Already voted");
-        require(block.timestamp <= proposals[_proposalId].endTime, "Voting period has ended");
+    function vote(uint256 _proposalId, bool _support) external {
+        require(members[msg.sender].isApproved, "Not a member");
+        require(members[msg.sender].hasPassedKYC, "KYC not passed");
+        require(!hasVoted[msg.sender][_proposalId], "Already voted");
+        require(block.timestamp <= proposals[_proposalId].startTime + votingPeriod, "Voting period has ended");
 
-        Proposal storage proposal = proposals[_proposalId];
+        uint256 weight = votingPower(msg.sender);
+        require(weight > 0, "No voting power");
+
         if (_support) {
-            proposal.forVotes += members[msg.sender].votingPower;
+            proposals[_proposalId].forVotes += weight;
         } else {
-            proposal.againstVotes += members[msg.sender].votingPower;
+            proposals[_proposalId].againstVotes += weight;
         }
-        hasVoted[_proposalId][msg.sender] = true;
-        emit Voted(_proposalId, msg.sender, _support);
+
+        hasVoted[msg.sender][_proposalId] = true;
+        emit Voted(_proposalId, msg.sender, _support, weight);
     }
 
-    function executeProposal(uint256 _proposalId) external onlyMember {
-        require(_proposalId < proposals.length, "Proposal does not exist");
+    function executeProposal(uint256 _proposalId) external {
         Proposal storage proposal = proposals[_proposalId];
+        require(block.timestamp > proposal.startTime + votingPeriod, "Voting period has not ended");
         require(!proposal.executed, "Proposal already executed");
-        require(block.timestamp > proposal.endTime, "Voting period has not ended");
 
         uint256 totalVotes = proposal.forVotes + proposal.againstVotes;
-        require(totalVotes >= (totalVotingPower * quorumPercentage) / 100, "Quorum not reached");
+        uint256 quorumVotes = (governanceToken.totalSupply() * quorumPercentage) / 100;
 
-        if (proposal.forVotes > proposal.againstVotes) {
-            proposal.executed = true;
-            // Execute the proposal (implementation depends on the specific actions required)
-            emit ProposalExecuted(_proposalId);
+        require(totalVotes >= quorumVotes, "Quorum not reached");
+        require(proposal.forVotes > proposal.againstVotes, "Proposal not passed");
+
+        proposal.executed = true;
+        emit ProposalExecuted(_proposalId);
+
+        // Here you would implement the actual execution of the proposal
+    }
+
+    function delegate(address delegatee) external {
+        require(members[msg.sender].isApproved, "Not a member");
+        require(members[msg.sender].hasPassedKYC, "KYC not passed");
+        require(delegatee != address(0), "Cannot delegate to zero address");
+        address currentDelegate = delegates[msg.sender];
+        delegates[msg.sender] = delegatee;
+        emit DelegateChanged(msg.sender, currentDelegate, delegatee);
+    }
+
+    function votingPower(address account) public view returns (uint256) {
+        address delegatee = delegates[account];
+        if (delegatee == address(0)) {
+            return governanceToken.balanceOf(account) + members[account].votingPower;
+        } else {
+            return governanceToken.balanceOf(delegatee) + members[delegatee].votingPower;
         }
     }
 
-    function setQuorumPercentage(uint256 _newQuorumPercentage) external onlyAdmin {
-        require(_newQuorumPercentage > 0 && _newQuorumPercentage <= 100, "Invalid quorum percentage");
-        quorumPercentage = _newQuorumPercentage;
+    function setVotingPeriod(uint256 _votingPeriod) external onlyRole(ADMIN_ROLE) {
+        votingPeriod = _votingPeriod;
     }
 
-    function setVotingPeriod(uint256 _newVotingPeriod) external onlyAdmin {
-        require(_newVotingPeriod > 0, "Invalid voting period");
-        votingPeriod = _newVotingPeriod;
+    function setQuorumPercentage(uint256 _quorumPercentage) external onlyRole(ADMIN_ROLE) {
+        require(_quorumPercentage > 0 && _quorumPercentage <= 100, "Invalid quorum percentage");
+        quorumPercentage = _quorumPercentage;
+    }
+
+    function setMemberVotingPower(address _member, uint256 _votingPower) external onlyRole(ADMIN_ROLE) {
+        require(members[_member].isApproved, "Member does not exist");
+        members[_member].votingPower = _votingPower;
     }
 }
