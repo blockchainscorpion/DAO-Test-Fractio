@@ -1,15 +1,37 @@
 const Governance = artifacts.require('Governance');
+const GovernanceToken = artifacts.require('GovernanceToken');
 const truffleAssert = require('truffle-assertions');
 
 contract('Governance', (accounts) => {
   let governance;
+  let governanceToken;
   const admin = accounts[0];
   const member1 = accounts[1];
   const member2 = accounts[2];
   const nonMember = accounts[3];
 
   beforeEach(async () => {
-    governance = await Governance.new({ from: admin });
+    // Deploy GovernanceToken first
+    governanceToken = await GovernanceToken.new('Governance Token', 'GOV', {
+      from: admin,
+    });
+
+    // Deploy Governance with GovernanceToken address
+    governance = await Governance.new(governanceToken.address, 86400, {
+      from: admin,
+    });
+
+    // Grant MINTER_ROLE and KYC_ROLE to the Governance contract
+    await governanceToken.grantRole(
+      await governanceToken.MINTER_ROLE(),
+      governance.address,
+      { from: admin }
+    );
+    await governanceToken.grantRole(
+      await governanceToken.KYC_ROLE(),
+      governance.address,
+      { from: admin }
+    );
   });
 
   describe('Membership Management', () => {
@@ -22,9 +44,9 @@ contract('Governance', (accounts) => {
         'Member should not have passed KYC initially'
       );
       assert.equal(
-        member.votingPower.toNumber(),
+        member.votingPower,
         1,
-        'Member should have correct voting power'
+        'Member should have at least 1 voting power'
       );
     });
 
@@ -48,11 +70,17 @@ contract('Governance', (accounts) => {
     it('should not allow non-admin to add or remove members', async () => {
       await truffleAssert.reverts(
         governance.addMember(member2, 1, { from: member1 }),
-        'Only admin can perform this action'
+        'AccessControl: account ' +
+          member1.toLowerCase() +
+          ' is missing role ' +
+          web3.utils.keccak256('ADMIN_ROLE')
       );
       await truffleAssert.reverts(
         governance.removeMember(admin, { from: member1 }),
-        'Only admin can perform this action'
+        'AccessControl: account ' +
+          member1.toLowerCase() +
+          ' is missing role ' +
+          web3.utils.keccak256('ADMIN_ROLE')
       );
     });
   });
@@ -61,8 +89,10 @@ contract('Governance', (accounts) => {
     beforeEach(async () => {
       await governance.addMember(member1, 1, { from: admin });
       await governance.updateKYCStatus(member1, true, { from: admin });
-      await governance.addMember(member2, 2, { from: admin });
+      await governance.addMember(member2, 1, { from: admin });
       await governance.updateKYCStatus(member2, true, { from: admin });
+      await governanceToken.mint(member1, 100, { from: admin });
+      await governanceToken.mint(member2, 200, { from: admin });
     });
 
     it('should allow approved members to create proposals', async () => {
@@ -95,7 +125,11 @@ contract('Governance', (accounts) => {
       await governance.createProposal('Test Proposal', { from: member1 });
       await governance.vote(0, true, { from: member2 });
       const proposal = await governance.proposals(0);
-      assert.equal(proposal.forVotes.toNumber(), 2, 'For votes should be 2');
+      assert.equal(
+        proposal.forVotes.toNumber(),
+        200,
+        'For votes should be 200'
+      );
     });
 
     it('should not allow double voting', async () => {
@@ -125,8 +159,8 @@ contract('Governance', (accounts) => {
     });
 
     it('should execute proposal after voting period if quorum is reached and majority approves', async () => {
-      await governance.vote(0, true, { from: member1 });
-      await governance.vote(0, true, { from: member2 });
+      await governance.vote(200, true, { from: member1 });
+      await governance.vote(200, true, { from: member2 });
 
       // Get the current voting period
       const votingPeriod = await governance.votingPeriod();
@@ -216,7 +250,10 @@ contract('Governance', (accounts) => {
     it('should not allow non-admin to set quorum percentage or voting period', async () => {
       await truffleAssert.reverts(
         governance.setQuorumPercentage(60, { from: member1 }),
-        'Only admin can perform this action'
+        'AccessControl: account ' +
+          member1.toLowerCase() +
+          ' is missing role ' +
+          web3.utils.keccak256('ADMIN_ROLE')
       );
       await truffleAssert.reverts(
         governance.setVotingPeriod(5 * 24 * 60 * 60, { from: member1 }),

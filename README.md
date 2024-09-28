@@ -131,7 +131,7 @@ The project includes a script to automatically update the Docker image after eac
 
 2. Run the script:
    ```
-   update-docker-image.bat
+   `.\update-docker-image.bat`
    ```
 
 This script will run `truffle migrate`, and if successful, it will rebuild the Docker image.
