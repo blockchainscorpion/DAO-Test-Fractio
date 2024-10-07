@@ -73,7 +73,7 @@ contract Governance is AccessControl {
     // Function to remove a member (only callable by admin)
     function removeMember(address _member) external onlyRole(ADMIN_ROLE) {
         require(members[_member].isApproved, "Member does not exist");
-        members[_member].isApproved = false;
+        delete members[_member];
         emit MemberRemoved(_member);
     }
 

@@ -60,7 +60,7 @@ contract('Governance', (accounts) => {
 
       expect(memberInfo.isApproved).to.be.false;
       expect(memberInfo.hasPassedKYC).to.be.false; // This should be false as it was set to false when adding the member
-      expect(memberInfo.votingPower.toNumber()).to.equal(1); // This will still be 1 as we don't change it in removeMember
+      expect(memberInfo.votingPower.toNumber()).to.equal(0); // This will be 0 as it is reset by 'removeMember'
 
       assert.isFalse(
         memberInfo.isApproved,
