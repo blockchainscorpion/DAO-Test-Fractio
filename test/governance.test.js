@@ -57,9 +57,11 @@ contract('Governance', (accounts) => {
       await governance.addMember(member1, 1, { from: admin });
       await governance.removeMember(member1, { from: admin });
       const memberInfo = await governance.members(member1);
+
       expect(memberInfo.isApproved).to.be.false;
-      expect(memberInfo.hasPassedKYC).to.be.true;
-      expect(memberInfo.votingPower.toNumber()).to.equal(1);
+      expect(memberInfo.hasPassedKYC).to.be.false; // This should be false as it was set to false when adding the member
+      expect(memberInfo.votingPower.toNumber()).to.equal(1); // This will still be 1 as we don't change it in removeMember
+
       assert.isFalse(
         memberInfo.isApproved,
         'Member should not be approved after removal'
