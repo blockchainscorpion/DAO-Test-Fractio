@@ -7,6 +7,7 @@ module.exports = async function (deployer, network, accounts) {
   const governanceToken = await GovernanceToken.deployed();
 
   // Deploy Governance with GovernanceToken address and voting period (e.g., 1 day in seconds)
-  const votingPeriod = 86400; // 1 day in seconds
+  const votingPeriod = 3 * 24 * 60 * 60; // 1 day in seconds
   await deployer.deploy(Governance, governanceToken.address, votingPeriod);
+  // Deploy Governance with GovernanceToken address and voting period (e.g., 3 days in seconds)
 };

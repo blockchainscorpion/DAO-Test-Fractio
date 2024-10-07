@@ -1,5 +1,6 @@
+// const Governance = artifacts.require('Governance');
 const GovernanceToken = artifacts.require('GovernanceToken');
-const { expectRevert } = require('@openzeppelin/test-helpers');
+const { expectRevert, time } = require('@openzeppelin/test-helpers');
 const { expect } = require('chai');
 
 contract('GovernanceToken', function (accounts) {
@@ -9,7 +10,6 @@ contract('GovernanceToken', function (accounts) {
   beforeEach(async function () {
     // Deploy a new GovernanceToken before each test
     token = await GovernanceToken.new('Governance Token', 'GOV');
-    
   });
 
   describe('Deployment', function () {

@@ -100,6 +100,7 @@ module.exports = {
 
   // Set default mocha options here, use special reporters, etc.
   mocha: {
+    // require: ['@babel/register'],
     // timeout: 100000
   },
 
@@ -118,6 +119,12 @@ module.exports = {
       },
     },
   },
+  contracts_directory: './contracts',
+  contracts_build_directory: './build/contracts',
+  contracts_to_compile: [
+    './contracts/Governance.sol',
+    './contracts/GovernanceToken.sol',
+  ],
 
   // Truffle DB is currently disabled by default; to enable it, change enabled:
   // false to enabled: true. The default storage location can also be

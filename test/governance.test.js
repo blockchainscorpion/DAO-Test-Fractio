@@ -1,25 +1,24 @@
 const Governance = artifacts.require('Governance');
 const GovernanceToken = artifacts.require('GovernanceToken');
+
+const { expect } = require('chai');
+const { expectRevert, time } = require('@openzeppelin/test-helpers');
 const truffleAssert = require('truffle-assertions');
 
 contract('Governance', (accounts) => {
   let governance;
   let governanceToken;
-  const admin = accounts[0];
-  const member1 = accounts[1];
-  const member2 = accounts[2];
-  const nonMember = accounts[3];
+  const [admin, member1, member2, nonMember] = accounts;
 
   beforeEach(async () => {
     // Deploy GovernanceToken first
-    governanceToken = await GovernanceToken.new('Governance Token', 'GOV', {
-      from: admin,
-    });
+    governanceToken = await GovernanceToken.new('Governance Token', 'GOV');
 
     // Deploy Governance with GovernanceToken address
-    governance = await Governance.new(governanceToken.address, 86400, {
-      from: admin,
-    });
+    governance = await Governance.new(
+      governanceToken.address,
+      time.duration.days(1)
+    );
 
     // Grant MINTER_ROLE and KYC_ROLE to the Governance contract
     await governanceToken.grantRole(
@@ -37,14 +36,18 @@ contract('Governance', (accounts) => {
   describe('Membership Management', () => {
     it('should allow admin to add a member', async () => {
       await governance.addMember(member1, 1, { from: admin });
-      const member = await governance.members(member1);
-      assert.isTrue(member.isApproved, 'Member should be approved');
+      const memberInfo = await governance.members(member1);
+      console.log('Member Info:', memberInfo);
+      expect(memberInfo.isApproved).to.be.true;
+      expect(memberInfo.hasPassedKYC).to.be.false;
+      expect(memberInfo.votingPower.toNumber()).to.equal(1);
+      assert.isTrue(memberInfo.isApproved, 'Member should be approved');
       assert.isFalse(
-        member.hasPassedKYC,
+        memberInfo.hasPassedKYC,
         'Member should not have passed KYC initially'
       );
       assert.equal(
-        member.votingPower,
+        memberInfo.votingPower,
         1,
         'Member should have at least 1 voting power'
       );
@@ -53,9 +56,12 @@ contract('Governance', (accounts) => {
     it('should allow admin to remove a member', async () => {
       await governance.addMember(member1, 1, { from: admin });
       await governance.removeMember(member1, { from: admin });
-      const member = await governance.members(member1);
+      const memberInfo = await governance.members(member1);
+      expect(memberInfo.isApproved).to.be.false;
+      expect(memberInfo.hasPassedKYC).to.be.true;
+      expect(memberInfo.votingPower.toNumber()).to.equal(1);
       assert.isFalse(
-        member.isApproved,
+        memberInfo.isApproved,
         'Member should not be approved after removal'
       );
     });

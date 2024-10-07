@@ -56,12 +56,12 @@ contract Governance is AccessControl {
     event DelegateChanged(address indexed delegator, address indexed fromDelegate, address indexed toDelegate);
 
     // Constructor to initialize the contract with the GovernanceToken address
-    constructor(address _governanceToken, uint _votingPeriod) {
-        governanceToken = GovernanceToken(_governanceToken);
-        _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
-        _grantRole(ADMIN_ROLE, msg.sender);
-        votingPeriod = _votingPeriod;
-    }
+    constructor(address _governanceToken, uint256 _votingPeriod) {
+    governanceToken = GovernanceToken(_governanceToken);
+    _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
+    _grantRole(ADMIN_ROLE, msg.sender);
+    votingPeriod = _votingPeriod;
+}
 
     // Function to add a new member (only callable by admin)
     function addMember(address _member, uint256 _votingPower) external onlyRole(ADMIN_ROLE) {
@@ -73,7 +73,7 @@ contract Governance is AccessControl {
     // Function to remove a member (only callable by admin)
     function removeMember(address _member) external onlyRole(ADMIN_ROLE) {
         require(members[_member].isApproved, "Member does not exist");
-        delete members[_member];
+        members[_member].isApproved = false;
         emit MemberRemoved(_member);
     }
 
@@ -140,7 +140,7 @@ contract Governance is AccessControl {
         proposal.executed = true;
         emit ProposalExecuted(_proposalId);
 
-        // Here you would implement the actual execution of the proposal
+        // Proposal execution...
     }
 
     // Function to delegate voting power to another address
@@ -163,15 +163,15 @@ contract Governance is AccessControl {
         }
     }
 
-    // Function to set the voting period (only callable by admin)
-    function setVotingPeriod(uint256 _votingPeriod) external onlyRole(ADMIN_ROLE) {
-        votingPeriod = _votingPeriod;
-    }
-
     // Function to set the quorum percentage (only callable by admin)
     function setQuorumPercentage(uint256 _quorumPercentage) external onlyRole(ADMIN_ROLE) {
         require(_quorumPercentage > 0 && _quorumPercentage <= 100, "Invalid quorum percentage");
         quorumPercentage = _quorumPercentage;
+    }
+
+    // Function to set the voting period (only callable by admin)
+    function setVotingPeriod(uint256 _votingPeriod) external onlyRole(ADMIN_ROLE) {
+        votingPeriod = _votingPeriod;
     }
 
     // Function to set additional voting power for a member (only callable by admin)
