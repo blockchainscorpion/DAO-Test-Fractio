@@ -118,7 +118,7 @@ contract('Governance', (accounts) => {
     it('should not allow non-members to create proposals', async () => {
       await truffleAssert.reverts(
         governance.createProposal('Test Proposal', { from: nonMember }),
-        'Only approved members can perform this action'
+        'Not a member'
       );
     });
 
@@ -126,7 +126,7 @@ contract('Governance', (accounts) => {
       await governance.updateKYCStatus(member1, false, { from: admin });
       await truffleAssert.reverts(
         governance.createProposal('Test Proposal', { from: member1 }),
-        'Member has not passed KYC'
+        'KYC not passed'
       );
     });
 
