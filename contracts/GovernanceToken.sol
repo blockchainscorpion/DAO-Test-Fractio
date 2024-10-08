@@ -3,6 +3,8 @@ pragma solidity ^0.8.20;
 
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "@openzeppelin/contracts/access/AccessControl.sol";
+import "@openzeppelin/contracts/utils/Strings.sol";
+
 
 // The GovernanceToken contract represents the token used for voting in the DAO
 contract GovernanceToken is ERC20, AccessControl {
@@ -25,7 +27,10 @@ contract GovernanceToken is ERC20, AccessControl {
     }
 
     // Function to mint new tokens (only callable by addresses with MINTER_ROLE)
-    function mint(address to, uint256 amount) public onlyRole(MINTER_ROLE) {
+    function mint(address to, uint256 amount) public {
+        if (!hasRole(MINTER_ROLE, msg.sender)) {
+            revert(string(abi.encodePacked("AccessControl: account ", Strings.toHexString(uint160(msg.sender), 20), " is missing role ", Strings.toHexString(uint256(MINTER_ROLE), 32))));
+        }
         _mint(to, amount);
     }
 

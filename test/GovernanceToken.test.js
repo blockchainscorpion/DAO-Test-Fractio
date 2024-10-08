@@ -1,15 +1,26 @@
-// const Governance = artifacts.require('Governance');
 const GovernanceToken = artifacts.require('GovernanceToken');
 const { expectRevert, time } = require('@openzeppelin/test-helpers');
-const { expect } = require('chai');
+const chai = require('chai');
+const BN = require('bn.js');
+const chaiBN = require('chai-bn')(BN);
+chai.use(chaiBN);
+const { expect } = chai;
+const truffleAssert = require('truffle-assertions');
 
 contract('GovernanceToken', function (accounts) {
   const [admin, user1, user2] = accounts;
   let token;
+  let KYC_ROLE;
 
   beforeEach(async function () {
     // Deploy a new GovernanceToken before each test
     token = await GovernanceToken.new('Governance Token', 'GOV');
+
+    // Get KYC role
+    KYC_ROLE = await token.KYC_ROLE();
+
+    // Ensure Admin has KYC role
+    await token.grantRole(KYC_ROLE, admin, { from: admin });
   });
 
   describe('Deployment', function () {
@@ -30,12 +41,10 @@ contract('GovernanceToken', function (accounts) {
 
     it('should not allow minting by non-minter', async function () {
       // Attempt to mint tokens from a non-minter account (user1)
-      await expectRevert(
+      const minterRole = await token.MINTER_ROLE();
+      await truffleAssert.reverts(
         token.mint(user1, 100, { from: user1 }),
-        'AccessControl: account ' +
-          user1.toLowerCase() +
-          ' is missing role ' +
-          web3.utils.keccak256('MINTER_ROLE')
+        `AccessControl: account ${user1.toLowerCase()} is missing role ${minterRole}`
       );
     });
   });
@@ -52,10 +61,7 @@ contract('GovernanceToken', function (accounts) {
       // Attempt to set KYC status from a non-KYC role account (user1)
       await expectRevert(
         token.setKYCStatus(user1, true, { from: user1 }),
-        'AccessControl: account ' +
-          user1.toLowerCase() +
-          ' is missing role ' +
-          web3.utils.keccak256('KYC_ROLE')
+        `AccessControl: account ${user1.toLowerCase()} is missing role ${KYC_ROLE}`
       );
     });
   });
