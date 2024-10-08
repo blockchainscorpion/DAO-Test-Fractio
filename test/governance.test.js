@@ -168,32 +168,15 @@ contract('Governance', (accounts) => {
     });
 
     it('should execute proposal after voting period if quorum is reached and majority approves', async () => {
-      await governance.vote(200, true, { from: member1 });
-      await governance.vote(200, true, { from: member2 });
+      await governance.createProposal('Test Proposal', { from: member1 });
+      await governance.vote(0, true, { from: member1 });
+      await governance.vote(0, true, { from: member2 });
 
       // Get the current voting period
       const votingPeriod = await governance.votingPeriod();
 
       // Increase time by voting period + 1 second
-      await web3.currentProvider.send(
-        {
-          jsonrpc: '2.0',
-          method: 'evm_increaseTime',
-          params: [votingPeriod.toNumber() + 1],
-          id: new Date().getTime(),
-        },
-        () => {}
-      );
-
-      // Mine a new block to ensure the increased time takes effect
-      await web3.currentProvider.send(
-        {
-          jsonrpc: '2.0',
-          method: 'evm_mine',
-          id: new Date().getTime(),
-        },
-        () => {}
-      );
+      await time.increase(votingPeriod.add(time.duration.seconds(1)));
 
       await governance.executeProposal(0, { from: member1 });
       const proposal = await governance.proposals(0);
@@ -201,33 +184,21 @@ contract('Governance', (accounts) => {
     });
 
     it('should not execute proposal if quorum is not reached', async () => {
+      // Create the proposal
+      await governance.createProposal('Test Proposal', { from: member1 });
+      // Set a high quorum percentage
+      await governance.setQuorumPercentage(80, { from: admin });
+      // Vote with insufficient voting power
       await governance.vote(0, true, { from: member1 });
 
       // Get the current voting period
       const votingPeriod = await governance.votingPeriod();
 
       // Increase time by voting period + 1 second
-      await web3.currentProvider.send(
-        {
-          jsonrpc: '2.0',
-          method: 'evm_increaseTime',
-          params: [votingPeriod.toNumber() + 1],
-          id: new Date().getTime(),
-        },
-        () => {}
-      );
+      await time.increase(votingPeriod.add(time.duration.seconds(1)));
 
-      // Mine a new block to ensure the increased time takes effect
-      await web3.currentProvider.send(
-        {
-          jsonrpc: '2.0',
-          method: 'evm_mine',
-          id: new Date().getTime(),
-        },
-        () => {}
-      );
-
-      await truffleAssert.reverts(
+      // Try to execute the proposal
+      await expectRevert(
         governance.executeProposal(0, { from: member1 }),
         'Quorum not reached'
       );
@@ -257,16 +228,19 @@ contract('Governance', (accounts) => {
     });
 
     it('should not allow non-admin to set quorum percentage or voting period', async () => {
+      const expectedError = `AccessControl: account ${member1.toLowerCase()} is missing role ${web3.utils.padLeft(
+        ADMIN_ROLE,
+        64
+      )}`;
+
       await truffleAssert.reverts(
         governance.setQuorumPercentage(60, { from: member1 }),
-        'AccessControl: account ' +
-          member1.toLowerCase() +
-          ' is missing role ' +
-          web3.utils.keccak256('ADMIN_ROLE')
+        expectedError
       );
+
       await truffleAssert.reverts(
         governance.setVotingPeriod(5 * 24 * 60 * 60, { from: member1 }),
-        'Only admin can perform this action'
+        expectedError
       );
     });
   });

@@ -3,6 +3,7 @@ pragma solidity ^0.8.20;
 
 import "./GovernanceToken.sol";
 import "@openzeppelin/contracts/access/AccessControl.sol";
+import "@openzeppelin/contracts/utils/Strings.sol";
 
 // The Governance contract manages the DAO's decision-making processes
 contract Governance is AccessControl {
@@ -11,20 +12,20 @@ contract Governance is AccessControl {
 
     // Struct to store member information
     struct Member {
-        bool isApproved;       // Whether the member is approved to participate
-        bool hasPassedKYC;     // Whether the member has passed KYC checks
-        uint256 votingPower;   // Additional voting power assigned to the member
+        bool isApproved; // Whether the member is approved to participate
+        bool hasPassedKYC; // Whether the member has passed KYC checks
+        uint256 votingPower; // Additional voting power assigned to the member
     }
 
     // Struct to store proposal information
     struct Proposal {
-        uint256 id;            // Unique identifier for the proposal
-        address proposer;      // Address of the member who created the proposal
-        string description;    // Description of the proposal
-        uint256 forVotes;      // Number of votes in favor
-        uint256 againstVotes;  // Number of votes against
-        uint256 startTime;     // Timestamp when the proposal was created
-        bool executed;         // Whether the proposal has been executed
+        uint256 id; // Unique identifier for the proposal
+        address proposer; // Address of the member who created the proposal
+        string description; // Description of the proposal
+        uint256 forVotes; // Number of votes in favor
+        uint256 againstVotes; // Number of votes against
+        uint256 startTime; // Timestamp when the proposal was created
+        bool executed; // Whether the proposal has been executed
     }
 
     // Mapping to store member information
@@ -46,27 +47,47 @@ contract Governance is AccessControl {
     // Role identifier for admin functions
     bytes32 public constant ADMIN_ROLE = keccak256("ADMIN_ROLE");
 
+    // Memner list
+    address[] public memberList;
+
     // Events
     event MemberAdded(address member);
     event MemberRemoved(address member);
     event KYCStatusUpdated(address member, bool status);
-    event ProposalCreated(uint256 indexed proposalId, address proposer, string description);
-    event Voted(uint256 indexed proposalId, address voter, bool support, uint256 weight);
+    event ProposalCreated(
+        uint256 indexed proposalId,
+        address proposer,
+        string description
+    );
+    event Voted(
+        uint256 indexed proposalId,
+        address voter,
+        bool support,
+        uint256 weight
+    );
     event ProposalExecuted(uint256 indexed proposalId);
-    event DelegateChanged(address indexed delegator, address indexed fromDelegate, address indexed toDelegate);
+    event DelegateChanged(
+        address indexed delegator,
+        address indexed fromDelegate,
+        address indexed toDelegate
+    );
 
     // Constructor to initialize the contract with the GovernanceToken address
     constructor(address _governanceToken, uint256 _votingPeriod) {
-    governanceToken = GovernanceToken(_governanceToken);
-    _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
-    _grantRole(ADMIN_ROLE, msg.sender);
-    votingPeriod = _votingPeriod;
-}
+        governanceToken = GovernanceToken(_governanceToken);
+        _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
+        _grantRole(ADMIN_ROLE, msg.sender);
+        votingPeriod = _votingPeriod;
+    }
 
     // Function to add a new member (only callable by admin)
-    function addMember(address _member, uint256 _votingPower) external onlyRole(ADMIN_ROLE) {
+    function addMember(
+        address _member,
+        uint256 _votingPower
+    ) external onlyRole(ADMIN_ROLE) {
         require(!members[_member].isApproved, "Member already exists");
         members[_member] = Member(true, false, _votingPower);
+        memberList.push(_member);
         emit MemberAdded(_member);
     }
 
@@ -78,7 +99,10 @@ contract Governance is AccessControl {
     }
 
     // Function to update a member's KYC status (only callable by admin)
-    function updateKYCStatus(address _member, bool _status) external onlyRole(ADMIN_ROLE) {
+    function updateKYCStatus(
+        address _member,
+        bool _status
+    ) external onlyRole(ADMIN_ROLE) {
         require(members[_member].isApproved, "Member does not exist");
         members[_member].hasPassedKYC = _status;
         governanceToken.setKYCStatus(_member, _status);
@@ -90,7 +114,7 @@ contract Governance is AccessControl {
         require(members[msg.sender].isApproved, "Not a member");
         require(members[msg.sender].hasPassedKYC, "KYC not passed");
         require(votingPower(msg.sender) > 0, "No voting power");
-        
+
         uint256 proposalId = proposalCount++;
         proposals[proposalId] = Proposal({
             id: proposalId,
@@ -110,7 +134,10 @@ contract Governance is AccessControl {
         require(members[msg.sender].isApproved, "Not a member");
         require(members[msg.sender].hasPassedKYC, "KYC not passed");
         require(!hasVoted[msg.sender][_proposalId], "Already voted");
-        require(block.timestamp <= proposals[_proposalId].startTime + votingPeriod, "Voting period has ended");
+        require(
+            block.timestamp <= proposals[_proposalId].startTime + votingPeriod,
+            "Voting period has ended"
+        );
 
         uint256 weight = votingPower(msg.sender);
         require(weight > 0, "No voting power");
@@ -128,19 +155,37 @@ contract Governance is AccessControl {
     // Function to execute a proposal after the voting period has ended
     function executeProposal(uint256 _proposalId) external {
         Proposal storage proposal = proposals[_proposalId];
-        require(block.timestamp > proposal.startTime + votingPeriod, "Voting period has not ended");
+        require(
+            block.timestamp > proposal.startTime + votingPeriod,
+            "Voting period has not ended"
+        );
         require(!proposal.executed, "Proposal already executed");
 
         uint256 totalVotes = proposal.forVotes + proposal.againstVotes;
-        uint256 quorumVotes = (governanceToken.totalSupply() * quorumPercentage) / 100;
+        uint256 totalVotingPower = getTotalVotingPower();
+        uint256 quorumVotes = (totalVotingPower * quorumPercentage) / 100;
+
+        // console.log("Total votes: %s, Quorum votes: %s", totalVotes, quorumVotes);
 
         require(totalVotes >= quorumVotes, "Quorum not reached");
-        require(proposal.forVotes > proposal.againstVotes, "Proposal not passed");
+        require(
+            proposal.forVotes > proposal.againstVotes,
+            "Proposal not passed"
+        );
 
         proposal.executed = true;
         emit ProposalExecuted(_proposalId);
 
         // Proposal execution...
+    }
+
+    // Calculate total voting power
+    function getTotalVotingPower() public view returns (uint256) {
+        uint256 totalPower = 0;
+        for (uint256 i = 0; i < memberList.length; i++) {
+            totalPower += votingPower(memberList[i]);
+        }
+        return totalPower;
     }
 
     // Function to delegate voting power to another address
@@ -157,25 +202,41 @@ contract Governance is AccessControl {
     function votingPower(address account) public view returns (uint256) {
         address delegatee = delegates[account];
         if (delegatee == address(0)) {
-            return governanceToken.balanceOf(account) + members[account].votingPower;
+            return
+                governanceToken.balanceOf(account) +
+                members[account].votingPower;
         } else {
-            return governanceToken.balanceOf(delegatee) + members[delegatee].votingPower;
+            return
+                governanceToken.balanceOf(delegatee) +
+                members[delegatee].votingPower;
         }
     }
 
     // Function to set the quorum percentage (only callable by admin)
-    function setQuorumPercentage(uint256 _quorumPercentage) external onlyRole(ADMIN_ROLE) {
-        require(_quorumPercentage > 0 && _quorumPercentage <= 100, "Invalid quorum percentage");
-        quorumPercentage = _quorumPercentage;
+    function setQuorumPercentage(uint256 _quorumPercentage) external {
+    if (!hasRole(ADMIN_ROLE, msg.sender)) {
+        revert(string(abi.encodePacked("AccessControl: account ", Strings.toHexString(uint160(msg.sender), 20), " is missing role ", Strings.toHexString(uint256(ADMIN_ROLE), 32))));
     }
+    require(
+        _quorumPercentage > 0 && _quorumPercentage <= 100,
+        "Invalid quorum percentage"
+    );
+    quorumPercentage = _quorumPercentage;
+}
 
     // Function to set the voting period (only callable by admin)
-    function setVotingPeriod(uint256 _votingPeriod) external onlyRole(ADMIN_ROLE) {
-        votingPeriod = _votingPeriod;
+    function setVotingPeriod(uint256 _votingPeriod) external {
+    if (!hasRole(ADMIN_ROLE, msg.sender)) {
+        revert(string(abi.encodePacked("AccessControl: account ", Strings.toHexString(uint160(msg.sender), 20), " is missing role ", Strings.toHexString(uint256(ADMIN_ROLE), 32))));
     }
+    votingPeriod = _votingPeriod;
+}
 
     // Function to set additional voting power for a member (only callable by admin)
-    function setMemberVotingPower(address _member, uint256 _votingPower) external onlyRole(ADMIN_ROLE) {
+    function setMemberVotingPower(
+        address _member,
+        uint256 _votingPower
+    ) external onlyRole(ADMIN_ROLE) {
         require(members[_member].isApproved, "Member does not exist");
         members[_member].votingPower = _votingPower;
     }
