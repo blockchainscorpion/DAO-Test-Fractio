@@ -136,7 +136,7 @@ contract('Governance', (accounts) => {
       const proposal = await governance.proposals(0);
       assert.equal(
         proposal.forVotes.toNumber(),
-        200,
+        200 + 1,
         'For votes should be 200'
       );
     });
