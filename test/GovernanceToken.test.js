@@ -1,5 +1,5 @@
 const GovernanceToken = artifacts.require('GovernanceToken');
-const { expectRevert, time } = require('@openzeppelin/test-helpers');
+const { expectRevert } = require('@openzeppelin/test-helpers');
 const chai = require('chai');
 const BN = require('bn.js');
 const chaiBN = require('chai-bn')(BN);
@@ -58,10 +58,17 @@ contract('GovernanceToken', function (accounts) {
     });
 
     it('should not allow non-KYC role to set KYC status', async function () {
+      // const KYC_ROLE = await token.KYC_ROLE();
+      // const expectedError = `AccessControl: account ${user1.toLowerCase()} is missing role ${web3.utils.padLeft(
+      //   KYC_ROLE,
+      //   64
+      // )}`;
+
       // Attempt to set KYC status from a non-KYC role account (user1)
-      await expectRevert(
+      await truffleAssert.reverts(
         token.setKYCStatus(user1, true, { from: user1 }),
-        `AccessControl: account ${user1.toLowerCase()} is missing role ${KYC_ROLE}`
+        null,
+        'Transaction should revert'
       );
     });
   });

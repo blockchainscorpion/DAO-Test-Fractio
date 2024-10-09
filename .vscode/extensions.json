@@ -1,3 +1,6 @@
 {
-  "recommendations": ["trufflesuite-csi.truffle-vscode"]
+  "recommendations": [
+    "trufflesuite-csi.truffle-vscode",
+    "nomicfoundation.hardhat-solidity"
+  ]
 }
